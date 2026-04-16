@@ -5,7 +5,7 @@
 #   CS   -> GPIO 5
 #   DC   -> GPIO 6
 #   RST  -> GPIO 7
-# Resolution: 320x480, RGB565
+# Resolution: 480x320 landscape (+90°), RGB565
 
 from machine import Pin, SPI
 import time
@@ -19,13 +19,13 @@ GREEN  = const(0x07E0)
 BLUE   = const(0x001F)
 GRAY   = const(0x8410)
 
-WIDTH  = const(320)
-HEIGHT = const(480)
+WIDTH  = const(480)
+HEIGHT = const(320)
 
 
 class ST7796S:
     def __init__(self):
-        self.spi = SPI(0, baudrate=40_000_000, polarity=0, phase=0,
+        self.spi = SPI(0, baudrate=20_000_000, polarity=0, phase=0,
                        sck=Pin(2), mosi=Pin(3))
         self.cs  = Pin(5, Pin.OUT, value=1)
         self.dc  = Pin(6, Pin.OUT, value=0)
@@ -62,25 +62,13 @@ class ST7796S:
         time.sleep_ms(120)
 
         self._cmd(0x01)               # Software reset
-        time.sleep_ms(150)
+        time.sleep_ms(200)
         self._cmd(0x11)               # Sleep out
         time.sleep_ms(500)
 
-        self._cd(0xF0, b'\xC3')       # Enable extension I
-        self._cd(0xF0, b'\x96')       # Enable extension II
-        self._cd(0x36, b'\x48')       # MADCTL: portrait, BGR
         self._cd(0x3A, b'\x55')       # Pixel format: 16-bit RGB565
-        self._cd(0xB4, b'\x01')       # Display inversion control
-        self._cd(0xB7, b'\xC6')       # Entry mode set
-        self._cd(0xC0, b'\x80\x45')   # Power control 1
-        self._cd(0xC1, b'\x13')       # Power control 2
-        self._cd(0xC2, b'\xA7')       # Power control 3
-        self._cd(0xC5, b'\x0A')       # VCOM
-        self._cd(0xE8, b'\x40\x8A\x00\x00\x29\x19\xA5\x33')  # Display function
-        self._cd(0xE0, b'\xD0\x08\x0F\x06\x06\x33\x30\x33\x47\x17\x13\x13\x2B\x31')  # +gamma
-        self._cd(0xE1, b'\xD0\x0A\x11\x0B\x09\x3C\x34\x54\x4B\x16\x13\x1B\x25\x30')  # -gamma
-        self._cd(0xF0, b'\x3C')       # Disable extension I
-        self._cd(0xF0, b'\x69')       # Disable extension II
+        self._cd(0x36, b'\x28')       # MADCTL: landscape +90°, BGR
+        self._cmd(0x21)               # Display inversion ON (panel is hardware-inverted)
 
         self._cmd(0x29)               # Display on
         time.sleep_ms(100)
