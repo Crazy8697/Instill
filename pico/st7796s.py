@@ -13,7 +13,7 @@ import time
 # RGB565 color constants
 BLACK  = const(0x0000)
 WHITE  = const(0xFFFF)
-YELLOW = const(0xFFE0)
+YELLOW = const(0xFFF0)
 RED    = const(0xF800)
 GREEN  = const(0x07E0)
 BLUE   = const(0x001F)
@@ -68,8 +68,13 @@ class ST7796S:
 
         self._cd(0x3A, b'\x55')       # Pixel format: 16-bit RGB565
         self._cd(0x36, b'\x28')       # MADCTL: landscape +90°, BGR
-        self._cmd(0x21)               # Display inversion ON (panel is hardware-inverted)
-
+        self._cd(0xC0, b'\x80\x45')   # Power control 1
+        self._cd(0xC1, b'\x13')       # Power control 2
+        self._cd(0xC2, b'\xA7')       # Power control 3
+        self._cd(0xC5, b'\x09')       # VCOM
+        self._cd(0xE0, b'\xF0\x06\x0B\x07\x06\x05\x2E\x33\x47\x3A\x17\x16\x2E\x31')  # +gamma
+        self._cd(0xE1, b'\xF0\x09\x0D\x09\x08\x23\x2E\x33\x46\x38\x13\x13\x2C\x32')  # -gamma
+        self._cmd(0x21)               # INVON (panel is hardware-inverted)
         self._cmd(0x29)               # Display on
         time.sleep_ms(100)
 
