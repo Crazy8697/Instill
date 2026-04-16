@@ -1,12 +1,11 @@
-# main.py — Instill gauge screen
-# Static layout with OBD placeholder values. Values populated in Phase 1 OBD loop.
+# main.py — Instill gauge screen with live OBD data
 
 from st7796s import ST7796S, BLACK, YELLOW, GRAY, WHITE, WIDTH, HEIGHT
+from obd import OBD
 import time
 
 # ------------------------------------------------------------------ layout
 
-# Gauge definitions: (id, label, unit, x, y, w, h)
 GAUGES = [
     ('rpm',      'RPM',      '',      0,   24, 160, 146),
     ('coolant',  'COOLANT',  'C',   161,   24, 159, 146),
@@ -15,7 +14,6 @@ GAUGES = [
     ('maf',      'MAF',    'g/s',   241,  171, 239, 149),
 ]
 
-# Placeholder values shown before OBD connects
 PLACEHOLDERS = {
     'rpm':      '----',
     'coolant':  '--',
@@ -32,49 +30,44 @@ def text_center(tft, s, cx, y, color, bg, scale):
 
 
 def draw_gauge(tft, gauge_id, value_str):
-    """Redraw the value area of a single gauge."""
     for gid, label, unit, gx, gy, gw, gh in GAUGES:
         if gid != gauge_id:
             continue
         cx = gx + gw // 2
-
-        # Clear value + unit area
         tft.fill_rect(gx + 1, gy + 28, gw - 2, 48, BLACK)
-
-        # Value (scale 3 = 24px tall)
         text_center(tft, value_str, cx, gy + 30, YELLOW, BLACK, 3)
-
-        # Unit
         if unit:
             text_center(tft, unit, cx, gy + 58, GRAY, BLACK, 1)
         break
 
 
+def draw_status(tft, connected):
+    label = 'BT' if connected else '--'
+    color = YELLOW if connected else GRAY
+    tft.fill_rect(WIDTH - 20, 4, 20, 14, BLACK)
+    tft.text(label, WIDTH - 18, 4, color=color, bg=BLACK, scale=1)
+
+
 def draw_layout(tft):
-    """Draw the full gauge frame. Call once on startup."""
     tft.fill(BLACK)
 
-    # --- header bar ---
     text_center(tft, 'INSTILL', WIDTH // 2, 4, YELLOW, BLACK, 2)
     tft.hline(0, 22, WIDTH, YELLOW)
     tft.hline(0, 23, WIDTH, YELLOW)
 
-    # --- row divider ---
     tft.hline(0, 169, WIDTH, YELLOW)
     tft.hline(0, 170, WIDTH, YELLOW)
 
-    # --- column dividers row 1 ---
     tft.vline(160, 24, 145, YELLOW)
     tft.vline(320, 24, 145, YELLOW)
-
-    # --- column divider row 2 ---
     tft.vline(240, 171, 149, YELLOW)
 
-    # --- gauge labels ---
     for gid, label, unit, gx, gy, gw, gh in GAUGES:
         cx = gx + gw // 2
         text_center(tft, label, cx, gy + 8, GRAY, BLACK, 1)
         draw_gauge(tft, gid, PLACEHOLDERS[gid])
+
+    draw_status(tft, False)
 
 
 # ------------------------------------------------------------------ main
@@ -82,9 +75,30 @@ def draw_layout(tft):
 def main():
     tft = ST7796S()
     draw_layout(tft)
-    # OBD loop goes here in Phase 1
+
+    obd = OBD()
+    obd.start()
+
+    prev_connected = False
+
     while True:
-        time.sleep(1)
+        connected = obd.connected
+
+        if connected != prev_connected:
+            draw_status(tft, connected)
+            if not connected:
+                for gid in PLACEHOLDERS:
+                    draw_gauge(tft, gid, PLACEHOLDERS[gid])
+            prev_connected = connected
+
+        if not connected and obd._state == 'idle':
+            time.sleep_ms(3000)
+            obd.start()
+
+        for gauge_id, value in obd.get_data().items():
+            draw_gauge(tft, gauge_id, value)
+
+        time.sleep_ms(50)
 
 
 main()
