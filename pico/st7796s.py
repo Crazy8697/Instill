@@ -91,6 +91,11 @@ class ST7796S:
         self.fill_rect(0, 0, self.width, self.height, color)
 
     def fill_rect(self, x, y, w, h, color):
+        if x < 0: w += x; x = 0
+        if y < 0: h += y; y = 0
+        if x >= self.width or y >= self.height: return
+        if x + w > self.width:  w = self.width  - x
+        if y + h > self.height: h = self.height - y
         if w <= 0 or h <= 0:
             return
         self.set_window(x, y, x + w - 1, y + h - 1)

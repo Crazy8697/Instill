@@ -92,11 +92,6 @@ _BOTTOM = [
 
 def draw_screen0_frame(tft):
     tft.fill(BLACK)
-    # Vertical dividers full height
-    tft.vline(160, 0, HEIGHT, YELLOW)
-    tft.vline(320, 0, HEIGHT, YELLOW)
-    # Horizontal divider between gauge area and text row
-    tft.hline(0, 240, WIDTH, YELLOW)
 
     for col, gid, label, max_val in _GAUGES:
         cx = COL_CX[col]
@@ -166,10 +161,6 @@ ROW_H = 106   # 320 / 3
 
 def draw_screen1_frame(tft):
     tft.fill(BLACK)
-    tft.vline(160, 0, HEIGHT, YELLOW)
-    tft.vline(320, 0, HEIGHT, YELLOW)
-    tft.hline(0, ROW_H,     WIDTH, YELLOW)
-    tft.hline(0, ROW_H * 2, WIDTH, YELLOW)
 
     for row, col, oid, label, unit in _OFFROAD:
         cx = COL_CX[col]
