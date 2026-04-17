@@ -1,5 +1,5 @@
 # main.py — Instill dual-screen gauge display
-# Screen 0 (daily):  3 arc gauges (MPH / RPM / LOAD) + bottom text row (BATT / COOLANT / MPG)
+# Screen 0 (daily):  2 arc gauges (MPH / RPM) + bottom text row (BATT / COOL / EST / LOAD)
 # Screen 1 (offroad): 3x3 text grid
 # GPIO14 right button: cycle screens
 
@@ -17,12 +17,14 @@ DIM   = const(0x4208)   # slightly lighter gray for offroad labels
 TIRE_FACTOR  = 0.70488  # km/h → corrected MPH (33" on 29.1" stock)
 ARC_START    = 210.0    # degrees (math coords), needle at value=0
 ARC_SWEEP    = 240.0    # degrees clockwise to value=max
-ARC_R        = 80       # arc radius px
+ARC_R        = 88       # arc radius px
 ARC_THICK    = 10       # arc visual thickness (drawn as 3 radii)
 ARC_STEP     = 2        # degrees per arc segment
 
 GAUGE_CY     = 112      # arc center y within top 75% (240px)
-COL_CX       = [80, 240, 400]  # arc center x per column
+COL_CX       = [80, 240, 400]  # offroad screen column centers
+GAUGE_CX     = [135, 345]      # screen 0 arc gauge centers
+BOTTOM_CX    = [60, 180, 300, 420]  # screen 0 bottom row centers (4 items)
 
 # ------------------------------------------------------------------ arc drawing
 
@@ -80,7 +82,6 @@ _GAUGES = [
     # col, id, label, max_val
     (0, 'speed', 'MPH',  110),
     (1, 'rpm',   'RPM',  8000),
-    (2, 'load',  'LOAD', 100),
 ]
 
 _BOTTOM = [
@@ -88,29 +89,27 @@ _BOTTOM = [
     (0, 'battery', 'BATT', 'V'),
     (1, 'coolant', 'COOL', 'C'),
     (2, 'mpg',     'EST',  'MPG'),
+    (3, 'load',    'LOAD', '%'),
 ]
 
 def draw_screen0_frame(tft):
     tft.fill(BLACK)
 
     for col, gid, label, max_val in _GAUGES:
-        cx = COL_CX[col]
-        # Full arc track (dark)
+        cx = GAUGE_CX[col]
         draw_arc_range(tft, cx, GAUGE_CY, ARC_START, ARC_START - ARC_SWEEP, DARK)
-        # Label below arc
         text_center(tft, label, cx, GAUGE_CY + ARC_R + 14, GRAY, BLACK, 1)
-        # Placeholder value
         text_center(tft, '--', cx, GAUGE_CY - 12, YELLOW, BLACK, 3)
 
     for col, bid, label, unit in _BOTTOM:
-        cx = COL_CX[col]
+        cx = BOTTOM_CX[col]
         text_center(tft, label, cx, 248, GRAY,   BLACK, 1)
         text_center(tft, '--',  cx, 262, YELLOW, BLACK, 2)
         text_center(tft, unit,  cx, 284, GRAY,   BLACK, 1)
 
 def update_gauge(tft, g_state, new_angle):
     col   = g_state['col']
-    cx    = COL_CX[col]
+    cx    = GAUGE_CX[col]
     old_a = g_state['disp_a']
 
     if abs(new_angle - old_a) < 0.5:
@@ -129,7 +128,7 @@ def update_gauge_text(tft, col, val_str, prev_str, y=None, scale=3):
     if val_str == prev_str:
         return
     cy_text = (GAUGE_CY - 12) if y is None else y
-    cx = COL_CX[col]
+    cx = GAUGE_CX[col]
     # Erase old
     tft.fill_rect(cx - len(prev_str) * 8 * scale // 2 - 2, cy_text - 2,
                   len(prev_str) * 8 * scale + 4, 8 * scale + 4, BLACK)
@@ -138,8 +137,8 @@ def update_gauge_text(tft, col, val_str, prev_str, y=None, scale=3):
 def update_bottom(tft, col, val_str, prev_str):
     if val_str == prev_str:
         return
-    cx = COL_CX[col]
-    tft.fill_rect(col * 160 + 1, 262, 158, 20, BLACK)
+    cx = BOTTOM_CX[col]
+    tft.fill_rect(col * 120 + 1, 262, 118, 20, BLACK)
     text_center(tft, val_str, cx, 262, YELLOW, BLACK, 2)
 
 # ------------------------------------------------------------------ screen 1 layout (offroad)
@@ -213,11 +212,10 @@ def main():
     g_state = [
         {'col': 0, 'max': 110,  'disp_a': ARC_START, 'tgt_a': ARC_START, 'val_str': '--'},
         {'col': 1, 'max': 8000, 'disp_a': ARC_START, 'tgt_a': ARC_START, 'val_str': '--'},
-        {'col': 2, 'max': 100,  'disp_a': ARC_START, 'tgt_a': ARC_START, 'val_str': '--'},
     ]
 
     # Bottom row state
-    b_state = {'battery': '--.-', 'coolant': '--', 'mpg': '--.-'}
+    b_state = {'battery': '--.-', 'coolant': '--', 'mpg': '--.-', 'load': '--'}
 
     # Offroad cell state
     o_state = {oid: '--' for _, _, oid, _, _ in _OFFROAD}
@@ -241,7 +239,7 @@ def main():
                     draw_screen0_frame(tft)
                     # Restore arc state to full redraw
                     for g in g_state:
-                        draw_arc_range(tft, COL_CX[g['col']], GAUGE_CY,
+                        draw_arc_range(tft, GAUGE_CX[g['col']], GAUGE_CY,
                                        ARC_START, g['disp_a'], YELLOW)
                 else:
                     draw_screen1_frame(tft)
@@ -257,7 +255,7 @@ def main():
             if not connected:
                 # Reset everything
                 for g in g_state:
-                    cx = COL_CX[g['col']]
+                    cx = GAUGE_CX[g['col']]
                     draw_arc_range(tft, cx, GAUGE_CY, ARC_START, g['disp_a'], DARK)
                     draw_arc_range(tft, cx, GAUGE_CY, ARC_START, ARC_START - ARC_SWEEP, DARK)
                     update_gauge_text(tft, g['col'], '--', g['val_str'])
@@ -266,7 +264,7 @@ def main():
                     g['val_str'] = '--'
                 for col, bid, label, unit in _BOTTOM:
                     update_bottom(tft, col, '--', b_state.get(bid, '--'))
-                b_state = {'battery': '--.-', 'coolant': '--', 'mpg': '--.-'}
+                b_state = {'battery': '--.-', 'coolant': '--', 'mpg': '--.-', 'load': '--'}
             prev_connected = connected
 
         if not connected and obd._state == 'idle':
@@ -304,11 +302,10 @@ def main():
                     g_state[1]['val_str'] = val
 
             elif key == 'load':
+                load_s = val + '%'
                 if screen == 0:
-                    tgt = val_to_angle(int(val), 100)
-                    g_state[2]['tgt_a'] = tgt
-                    update_gauge_text(tft, 2, val+'%', g_state[2]['val_str'])
-                    g_state[2]['val_str'] = val+'%'
+                    update_bottom(tft, 3, load_s, b_state['load'])
+                    b_state['load'] = load_s
 
             elif key == 'coolant':
                 if screen == 0:

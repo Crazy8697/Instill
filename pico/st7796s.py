@@ -75,6 +75,8 @@ class ST7796S:
         self._cd(0xE0, b'\xF0\x06\x0B\x07\x06\x05\x2E\x33\x47\x3A\x17\x16\x2E\x31')  # +gamma
         self._cd(0xE1, b'\xF0\x09\x0D\x09\x08\x23\x2E\x33\x46\x38\x13\x13\x2C\x32')  # -gamma
         self._cmd(0x21)               # INVON (panel is hardware-inverted)
+        self._cd(0x53, b'\x2C')       # WRCTRLD: enable brightness + backlight control
+        self._cd(0x51, b'\xFF')       # WRDISBV: max brightness
         self._cmd(0x29)               # Display on
         time.sleep_ms(100)
 

@@ -13,64 +13,94 @@ Named after the Sinestro Corps yellow lantern oath. The vehicle is **Malia**, na
 
 A distributed vehicle monitoring and automation system built from scratch for a **2001 Nissan Xterra SE**. No budget. Everything from parts on hand.
 
-Instill runs on a Raspberry Pi Pico2W and a pair of Arduino Nanos. It reads OBD-II data over Bluetooth, drives a 3.5" TFT display with live gauges, automates headlights based on ambient light, and monitors cabin environment — all without cloud dependencies.
+Instill runs on a Raspberry Pi Pico 2W and a pair of Arduino Nanos. It reads OBD-II data over Bluetooth LE, drives a 3.5" TFT display with live gauges, automates headlights based on ambient light, and monitors cabin environment — all without cloud dependencies.
 
 ---
 
 ## Hardware
 
-### Brain
-| Part | Role |
-|------|------|
-| Raspberry Pi Pico2W | Main controller — OBD, display, coordination |
-| 3.5" TFT display (SPI) | Gauge display, likely ILI9488 controller |
-| Micro Mechanic OBD-II adapter | Bluetooth ELM327, plugs into OBD-II port |
-| Pico Breadboard Kit breakout | Exposes TFT header, buttons, joystick, RGB LED, buzzer |
+### Raspberry Pi Pico 2W
+**Current test board:** 52Pi Breadboard Kit Plus (EP-0172)
 
-### Sensor Nodes
-| Part | Location | Role |
-|------|----------|------|
-| Arduino Nano (Column) | Steering column area | Lighting automation via photoresistor + relay |
-| Arduino Nano (Sensor) | Under seat/dash | Cabin temp/humidity (DHT sensor) |
+**Responsibilities:**
+- **Display** — ST7796S 3.5" TFT, 480×320, SPI
+- **OBD comms** — Bluetooth LE (Micro Mechanic 18002, MAC 00:1D:A5:00:F9:57)
 
-### Sensor Kit (Inland 37-piece)
-Joystick, Flame Sensor, RGB LED, Heartbeat Sensor, Light Cup, Hall Magnetic Sensor, Relay, Linear Hall Sensor, SMD RGB, 7-Color Flash, Tilt Switch, Temperature Sensor, Big Sound Sensor, Touch Sensor, Two-Color LED, Laser Emitter, Ball Switch, Analog Temperature Sensor, Small Sound Sensor, Digital Temperature Sensor ×2, Button, Photoresistor, IR Emission, Tracking Sensor, Buzzer, Reed Switch, Shock Sensor, Temperature and Humidity Sensor, IR Receiver, Avoidance Sensor, Passive Buzzer, Mini Reed, Rotary Encoders, Analog Hall Sensor, Tap Module, Light Blocking.
+| GPIO | Function |
+|------|----------|
+| 2 | TFT CLK (SPI0) |
+| 3 | TFT MOSI (SPI0) |
+| 5 | TFT CS |
+| 6 | TFT DC |
+| 7 | TFT RST |
+| 14 | Right button (cycle screens) |
+| 15 | Left button (unused) |
 
-### Additional Parts on Hand
-- 1G accelerometer (Radio Shack era)
-- MOSFETs, relays, optocouplers, 555 timers, transistors, rectifier diodes
-- 15kΩ resistors (~200 in stock)
-- Tact buttons and momentary switches
-- 24V fans (run at 12V reduced or PWM via MOSFET)
-- Stepper motors, adhesive heatsinks
-- Harvest boards: TVs, power supplies, HVAC controls, network gear
+### Arduino Nano — Column
+**Location:** Steering column
+
+**Responsibilities:**
+- Lighting automation
+- IR garage door (planned)
+
+### Arduino Nano — Sensor
+**Location:** Under dash
+
+**Responsibilities:**
+- DHT temp/humidity (planned)
+
+### Nano UART Wiring
+- Nano TX (5V) → 15kΩ + 15kΩ voltage divider → Pico RX (3.3V)
+- Pico TX (3.3V) → Nano RX directly (5V tolerant)
+- Shared GND
 
 ---
 
 ## Architecture
 
 ```
-[Micro Mechanic BT] <--BT--> [Pico2W] <--SPI--> [3.5" TFT]
-                                  |
-                             [UART out] -----> [Pi 4B / 8.8" display] (Phase 4)
-                                  |
-                    [I2C or UART] |
-                    /             \
-         [Column Nano]        [Sensor Nano]
-         - Photoresistor       - DHT temp/humidity
-         - Relay               - Rotary encoder input
-           → headlight stalk
+[Micro Mechanic BT] <--BLE--> [Pico2W] <--SPI--> [3.5" TFT]
+                                   |
+                              [UART out] -----> [Pi 4B / 8.8" display] (Phase 4)
+                                   |
+                     [I2C or UART] |
+                     /             \
+          [Column Nano]        [Sensor Nano]
+          - IR garage door      - DHT temp/humidity
+          - Lighting relay
 ```
+
+---
+
+## Screens
+
+### Screen 0 — Daily
+- **Top 75%:** 2 arc gauges — MPH | RPM
+  - 240° sweep, r=88px, animated needle interpolation
+  - Gauge centers: x=135, x=345
+- **Bottom 25%:** Battery V | Coolant °C | Est. MPG | Engine Load %
+- **BT indicator** top-right: yellow=connected, dark=scanning
+
+### Screen 1 — Offroad
+3×3 text grid:
+
+|  | Col 0 | Col 1 | Col 2 |
+|--|-------|-------|-------|
+| Row 0 | Fuel Trim | Timing ° | Runtime min |
+| Row 1 | Pitch ° (placeholder) | Roll ° (placeholder) | IAT °C |
+| Row 2 | Battery V | O2 V | MAF g/s |
+
+GPIO14 (right button) cycles between screens.
 
 ---
 
 ## Phases
 
-### Phase 1 — OBD Gauges *(active)*
-- Pico2W connects to Micro Mechanic over classic Bluetooth (ELM327 AT commands)
-- Polls PIDs: RPM, coolant temp, battery voltage, throttle position, MAF
-- Displays gauge layout on 3.5" TFT
-- Rotary encoder for page switching
+### Phase 1 — OBD Gauges ✅
+- Pico 2W connects to Micro Mechanic over BLE (ELM327 AT commands)
+- Polls PIDs: RPM, speed, coolant, battery, MAF, load, timing, fuel trim, IAT, O2, runtime
+- Dual-screen gauge display on ST7796S 3.5" TFT
+- Tire-corrected MPH (33" on 29.1" stock), instantaneous MPG via MAF
 
 ### Phase 2 — Environmental Node
 - Sensor Nano reads DHT temp/humidity
@@ -79,9 +109,13 @@ Joystick, Flame Sensor, RGB LED, Heartbeat Sensor, Light Cup, Hall Magnetic Sens
 
 ### Phase 3 — Auto Headlights
 - Column Nano reads photoresistor
-- Below threshold → relay closes → triggers headlight circuit (parallel to stalk, full-on)
-- Nano powered from switched 12V — relay cannot fire with ignition off
-- Mimics stalk full-on position, overrides DRL naturally
+- Below threshold → relay closes → triggers headlight circuit
+- Nano powered from switched 12V
+
+### Phase 3b — IR Garage Door
+- Capture remote IR code with IR receiver
+- Replay on button press via IR LED on dash/visor
+- Goes in `nano_column/`
 
 ### Phase 4 — Pi Integration
 - Pico streams OBD + sensor JSON over UART to Pi 4B
@@ -89,20 +123,40 @@ Joystick, Flame Sensor, RGB LED, Heartbeat Sensor, Light Cup, Hall Magnetic Sens
 - No new hardware required
 
 ### Phase 5 — Stretch Goals
-- G-force / 0–60 display (1G accelerometer)
-- Fuel economy (MPG) from OBD
+- Pitch/roll display (IMU wired to Pico)
 - DTC reader/clear via TFT
-- Pitch/roll for wheeling
-- Ambient footwell lighting (MOSFET + LED strip, photoresistor auto-dim)
+- Ambient footwell lighting
+- G-force / 0–60 display
+
+---
+
+## OBD PIDs Polled
+
+| PID | Data | Formula |
+|-----|------|---------|
+| 010C | RPM | (A×256+B)/4 |
+| 010D | Speed | A × 0.70488 = corrected MPH (33" tires) |
+| 0104 | Engine load % | A×100/255 |
+| 0105 | Coolant °C | A−40 |
+| 010E | Timing advance ° | A/2−64 |
+| 0106 | Short term fuel trim % | (A−128)×100/128 |
+| 010F | IAT °C | A−40 |
+| 0114 | O2 voltage V | A×0.005 |
+| 011F | Runtime min | (A×256+B)/60 |
+| 0110 | MAF g/s | (A×256+B)/100 |
+| ATRV | Battery voltage | ELM327 direct |
+
+### MPG Formula
+`MPG = speed_mph × 7.107 / maf_gs` (instantaneous, MAF-based)
 
 ---
 
 ## Repository Layout
 
 ```
-/pico           MicroPython — Pico2W firmware (OBD, display, coordination)
-/nano_column    Arduino C — Column Nano (photoresistor, relay, headlights)
-/nano_sensor    Arduino C — Sensor Nano (DHT, rotary encoder)
+/pico           MicroPython — Pico2W firmware (OBD, display)
+/nano_column    Arduino C — Column Nano (IR, lighting)
+/nano_sensor    Arduino C — Sensor Nano (DHT)
 /docs           Wiring diagrams, pinouts, notes
 ```
 
@@ -112,41 +166,6 @@ Joystick, Flame Sensor, RGB LED, Heartbeat Sensor, Light Cup, Hall Magnetic Sens
 
 | Component | Language | Notes |
 |-----------|----------|-------|
-| Pico2W | MicroPython | ELM327 BT, TFT driver, OBD parser |
+| Pico2W | MicroPython v1.28.0 | BLE OBD, ST7796S SPI driver |
 | Arduino Nanos | Arduino C | Standard IDE |
 | Pi integration (Phase 4) | Python | UART serial stream reader |
-
----
-
-## Wiring Notes
-
-### Pico2W ↔ Arduino Nano UART
-- Nano TX (5V) → voltage divider (15kΩ + 15kΩ) → Pico RX (3.3V)
-- Pico TX (3.3V) → Nano RX directly (5V tolerant)
-- Shared GND
-
-### Power
-- Pico2W: 5V from USB or buck converter off switched 12V
-- Nanos: 5V from 7805 or buck converter off switched 12V
-- MCUs have no filesystem writes — hard power cut is safe
-
-### Isolation
-- Optocouplers between vehicle wiring (relay/headlight tap) and Nano GPIO
-- Protects against alternator noise and 12V spikes
-
----
-
-## OBD PID Reference
-
-```
-ATZ        reset
-ATE0       echo off
-ATL0       linefeeds off
-ATSP0      auto protocol
-0100       supported PIDs
-010C       RPM          → raw / 4
-010D       vehicle speed
-0105       coolant temp → raw − 40 °C
-0111       throttle     → raw × 100 / 255 %
-0110       MAF air flow rate
-```
